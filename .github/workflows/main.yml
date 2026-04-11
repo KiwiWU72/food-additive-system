@@ -35,20 +35,59 @@ jobs:
           pip install -r requirements.txt
           playwright install chromium
 
-      # 4. 執行總經理程式 (run_update.py)
-      # 它會去呼叫 scrapers 資料夾裡面的所有爬蟲
+      # 4. 讀取 FDA CSV 並初始化監控清單 (數據前處理層)
+      - name: Prepare Database from FDA CSV
+        run: |
+          python -c "
+          import csv, json, os
+          input_file = 'FoodSubstances.csv'
+          output_file = 'db_compact.json'
+          
+          data = []
+          if os.path.exists(input_file):
+              with open(input_file, mode='r', encoding='utf-8-sig') as f:
+                  # 跳過前 4 行無用的 FDA 宣告
+                  for _ in range(4): next(f)
+                  
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      cas_no = row.get('CAS Reg No (or other ID)', '').strip()
+                      name = row.get('Substance', '').strip()
+                      effect = row.get('Used for (Technical Effect)', 'Additive').replace('<br />', '').strip()
+                      
+                      # 剝除雜訊字元
+                      fema_no = row.get('FEMA No', '')
+                      if fema_no.startswith('=T(\"'): fema_no = fema_no[4:-2]
+                          
+                      if name:
+                          data.append({
+                              'id': cas_no if cas_no else f'FDA-{name[:5]}',
+                              'name': name,
+                              'category': effect,
+                              'source': 'US',
+                              'status': 'active',
+                              'metadata': { 'cas_no': cas_no, 'fema_no': fema_no }
+                          })
+              with open(output_file, 'w', encoding='utf-8') as f:
+                  json.dump(data, f, indent=2, ensure_ascii=False)
+              print(f'成功！已從 FDA CSV 萃取 {len(data)} 筆物質。')
+          else:
+              print('找不到 FoodSubstances.csv 檔案，跳過轉換。')
+          "
+
+      # 5. 執行總經理程式 (run_update.py)
       - name: Run Python Scraper
         run: python scrapers/run_update.py --scraper all
 
-      # 5. 將變更存檔並推回 GitHub
+      # 6. 將變更存檔並推回 GitHub
       - name: Commit and Push changes
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # 這裡假設你的資料庫名稱是 additives_db.json，請根據實際檔名修改
+          # 確保包含剛產生的 db_compact.json 以及爬蟲更新的檔案
           git add *.json
           
-          # 檢查是否有法規更新，有的話才存檔
+          # 檢查是否有變更，有的話才存檔推送
           git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update: Sync latest FDA/EFSA regulations"
           git push
