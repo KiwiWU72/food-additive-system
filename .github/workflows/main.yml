@@ -36,6 +36,7 @@ jobs:
           playwright install chromium
 
       # 4. 讀取 FDA CSV 並初始化監控清單 (數據前處理層)
+      # 【關鍵修復】: 使用 windows-1252 編碼來正確讀取 FDA 系統的特殊字元
       - name: Prepare Database from FDA CSV
         run: |
           python -c "
@@ -45,7 +46,7 @@ jobs:
           
           data = []
           if os.path.exists(input_file):
-              with open(input_file, mode='r', encoding='utf-8-sig') as f:
+              with open(input_file, mode='r', encoding='windows-1252') as f:
                   # 跳過前 4 行無用的 FDA 宣告
                   for _ in range(4): next(f)
                   
@@ -55,7 +56,7 @@ jobs:
                       name = row.get('Substance', '').strip()
                       effect = row.get('Used for (Technical Effect)', 'Additive').replace('<br />', '').strip()
                       
-                      # 剝除雜訊字元
+                      # 剝除 =T(\"...\") 雜訊字元
                       fema_no = row.get('FEMA No', '')
                       if fema_no.startswith('=T(\"'): fema_no = fema_no[4:-2]
                           
@@ -68,6 +69,8 @@ jobs:
                               'status': 'active',
                               'metadata': { 'cas_no': cas_no, 'fema_no': fema_no }
                           })
+              
+              # 存回標準的 utf-8 格式 JSON
               with open(output_file, 'w', encoding='utf-8') as f:
                   json.dump(data, f, indent=2, ensure_ascii=False)
               print(f'成功！已從 FDA CSV 萃取 {len(data)} 筆物質。')
@@ -85,9 +88,9 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # 確保包含剛產生的 db_compact.json 以及爬蟲更新的檔案
+          # 確保包含剛轉換出來的 db_compact.json 以及爬蟲更新的檔案
           git add *.json
           
-          # 檢查是否有變更，有的話才存檔推送
+          # 檢查是否有法規更新，有的話才存檔
           git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update: Sync latest FDA/EFSA regulations"
           git push
