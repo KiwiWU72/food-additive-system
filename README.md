@@ -9,7 +9,7 @@ Automated AI-driven dashboard for Taiwan Food R&amp;D. Maps TW additives to US (
 ### ✨ 核心功能 (Key Features)
 * **多國法規自動映射**：自動比對美、歐、日限量標準，避免人工檢索誤差。
 * **深層風險預警**：針對美國 USDA 管轄權、加州 Prop 65、歐盟南安普敦色素警語及帶入原則進行提醒。
-* **法規退場時間軸**：追蹤禁用預告期（如紅色三號），預警配方修正時間。
+* **法規退場時間軸**：追蹤禁用預告期，預警配方修正時間。
 * **自動化資料更新**：利用 GitHub Actions 每月自動執行爬蟲，確保法規數據為最新版本。
 
 ### 🛠️ 技術架構 (Architecture)
